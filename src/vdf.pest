@@ -1,0 +1,38 @@
+file = _{ SOI ~ newline* ~ many ~ newline* ~ &EOI }
+
+pair = { key ~ "="? ~ ( (cond? ~ sub_pair) | (simple_pair ~ cond?) ) }
+
+//TODO: more values than just quoted string (floats, integers, etc)
+simple_pair = { (quoted_str | unquoted_str) }
+
+key = _{ quoted_str | unquoted_str }
+
+sub_pair = { newline* ~ "{" ~ newline* ~ many ~ ("}" | &EOI)  }
+many = _{ ( pair ~ newline+ )* ~ pair? }
+
+// CONDITIONS ZONE
+cond = _{ "[" ~ cond_expr ~ "]"}
+cond_flag = { "$" ~ cond_char+ } // ex: $WIN32
+cond_binary_operation = _{ and | or } // TODO: Does ^ do XOR?
+    and = { "&&" }
+    or = { "||" }
+cond_expr = { cond_term ~ ( cond_binary_operation ~ cond_term )* }
+cond_term = _{ cond_flag | "(" ~ cond_expr ~ ")" | not_expr }
+    not_expr = { "!" ~ cond_expr }
+cond_char = _{ ASCII_ALPHANUMERIC | "_" }
+// END CONDITIONS ZONE
+
+quoted_str = _{ "\"" ~ string ~ "\"" }
+    string = { ( escape_sequence | (!"\"" ~ ANY) )* }
+    // NRTD stands for Never Roll The Dice. ;)
+    escape_sequence = _{ "\\" ~ ("n" | "r" | "t" | "d" | "\\" | "\"") }
+
+unquoted_str = @{ unquoted_str_char+ }
+    unquoted_str_char = _{!"\"" ~ !"{" ~ !"}" ~ !WHITESPACE ~ !newline_char ~ ANY}
+
+newline = _{ ( comment? ~ newline_char )+ }
+    newline_char = _{ "\r" | "\n" }
+    comment = _{ "//" ~ (!newline_char ~ ANY)* }
+
+COMMENT = _{ "/*" ~ ( !"*/" ~ ANY)* ~ "*/"}
+WHITESPACE = _{ " " | "\t" }
