@@ -2,13 +2,13 @@ use std::fmt::Debug;
 pub mod parse;
 
 #[derive(PartialEq)]
-pub enum Item {
-	String(String),
+pub enum Item<'a> {
+	String(&'a str),
 	Integer(u32), // not u64 cos speed, nobodys testing for it anyways
-	Many(Many),
+	Many(Many<'a>),
 }
 
-impl Debug for Item {
+impl<'a> Debug for Item<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use Item::*;
 		match self {
@@ -20,12 +20,12 @@ impl Debug for Item {
 }
 
 //TODO: maybe make this a type rather than a typedef.
-pub type Pair = (String, Item);
+pub type Pair<'a> = (&'a str, Item<'a>);
 
 #[derive(PartialEq)]
-pub struct Many (Box<[Pair]>);
+pub struct Many<'a> (Box<[Pair<'a>]>);
 
-impl Debug for Many {
+impl<'a> Debug for Many<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_map()
 			.entries(self.0.iter()

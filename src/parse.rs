@@ -10,7 +10,7 @@ use nom::branch::*;
 //TODO: perhaps switch from [u8] to char
 
 /// Parse a Valve Keyvalues file
-pub fn parse_vdf<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Many> {
+pub fn parse_vdf<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Many<'a>> {
     all_consuming(parse_many)(string)
 }
 
@@ -187,7 +187,7 @@ fn test_parse_conditional_and_evaluate(){
 }
 
 /// Parse either a quoted on unquoted string, automatically.
-fn parse_auto_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], String> {
+fn parse_auto_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], &'a str> {
     alt((parse_string, parse_unquoted_string))(string)
 }
 
@@ -195,34 +195,34 @@ fn parse_auto_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], String> {
 fn test_parse_auto_string() {
     assert_eq!(
         parse_auto_string(br#"" fun" rest of content"#),
-        Ok((&b" rest of content"[..], " fun".to_owned()))
+        Ok((&b" rest of content"[..], " fun"))
     );
     assert_eq!(
         parse_auto_string(br#""Escape Sequence \" ""#),
-        Ok((&b""[..], "Escape Sequence \" ".to_owned()))
+        Ok((&b""[..], "Escape Sequence \" "))
     );
     assert_eq!(
         parse_auto_string(br#"fun/path\to\my_asset.vtf bottom_text"#),
-        Ok((&b" bottom_text"[..], "fun/path\\to\\my_asset.vtf".to_owned()))
+        Ok((&b" bottom_text"[..], "fun/path\\to\\my_asset.vtf"))
     );
 }
 
-fn parse_unquoted_string<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], String> {
+fn parse_unquoted_string<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], &'a str> {
     // I only hope this not_bad conditional isn't too slow.
     let not_bad = |ref c| !b"\"{}[]\t \n\r".contains(c);
 
     let (rest, run) = take_while1(not_bad)(string)?;
     string = rest;
     // Safe Version:
-    // Ok((string, std::str::from_utf8_unchecked(run).unwrap().to_owned()))
-    Ok((string, unsafe{std::str::from_utf8_unchecked(run)}.to_owned()))
+    // Ok((string, std::str::from_utf8_unchecked(run).unwrap()))
+    Ok((string, unsafe{std::str::from_utf8_unchecked(run)}))
 }
 
 #[test]
 fn test_parse_unquoted_string(){
     assert_eq!(
         parse_unquoted_string(br#"fun/path\to\my_asset.vtf bottom_text"#),
-        Ok((&b" bottom_text"[..], "fun/path\\to\\my_asset.vtf".to_owned()))
+        Ok((&b" bottom_text"[..], "fun/path\\to\\my_asset.vtf"))
     );
 }
 
@@ -236,6 +236,21 @@ fn escape_map( c: u8 ) -> char {
         // so this code just turns \d into `d`.
         c => c.into(),
     }
+}
+
+fn parse_string_inner_unescaped<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], &'a str> {
+    let not_bad = |ref c| !b"\\\"".contains(c);
+
+    let (rest, run) = take_while(not_bad)(string)?;
+    string = rest;
+    // Safe Version:
+    // Ok((string, std::str::from_utf8_unchecked(run).unwrap()))
+    Ok((string, unsafe{std::str::from_utf8_unchecked(run)}))
+}
+
+#[test]
+fn test_parse_string_inner_unescaped() {
+    todo!();
 }
 
 // TODO: consider using https://docs.rs/nom/5.1.2/nom/bytes/complete/fn.escaped.html
@@ -267,21 +282,24 @@ fn parse_string_inner_escaped<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], 
     Ok((string, result))
 }
 
-fn parse_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], String> {
+fn parse_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], &'a str> {
     //TODO: unescaped version of inner, prob using parse_unquoted_string
-    let inner = parse_string_inner_escaped;
+    // let inner = parse_string_inner_escaped;
+    let inner = parse_string_inner_unescaped;
     delimited(tag("\""), inner, tag("\""))(string)
 }
 
 #[test]
 fn test_parse_string(){
     assert_eq!(
-        parse_string(br#"" fun" rest of content"#),
-        Ok((&b" rest of content"[..], " fun".to_owned()))
+        parse_string(br#"" fun" rest of content"#)
+            .map(|g| (std::str::from_utf8(g.0), g.1))
+            .map_err(|e| e.map(|e| (std::str::from_utf8(e.0), e.1))),
+        Ok((Ok(" rest of content"), " fun"))
     );
     assert_eq!(
         parse_string(br#""Escape Sequence \" ""#),
-        Ok((&b""[..], "Escape Sequence \" ".to_owned()))
+        Ok((&b""[..], "Escape Sequence \" "))
     );
 }
 

@@ -4,6 +4,11 @@ version = "0.1.0"
 authors = ["Magnus Larsen <golgothasTerror101@gmail.com>"]
 edition = "2018"
 
+[profile.release]
+lto = true
+codegen-units = 1
+panic = 'abort'
+
 [dependencies]
 jemallocator = "0.3.2"
 nom = "5.1.2"
