@@ -10,7 +10,7 @@ codegen-units = 1
 panic = 'abort'
 
 [features]
-default = ["parallel", "include_macro"]
+default = ["include_macro"]
 parallel = ["rayon"]
 evaluate_conditionals = [] #TODO: evaluate_conditionals
 escape_sequences = [] #TODO: fix escape_sequences

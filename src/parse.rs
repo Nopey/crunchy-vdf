@@ -441,16 +441,15 @@ fn test_newline(){
 /// Skips whitespace, newlines and all comments (`// ...` or `/* */`)
 /// doesn't fail
 fn newline_maybe<'a> (mut string: &'a [u8]) -> IResult<&'a [u8], ()>{
+    let sp = |ref c| b"\n\r \t".contains(c);
     let nl = |ref c| b"\n\r".contains(c);
 
     loop{
-        //TODO: be faster about it..
-        string = whitespace(string)?.0;
-
-        string = take_while(nl)(string)?.0;
-        string = whitespace(string)?.0;
+        string = take_while(sp)(string)?.0;
         if tag::<_,_, (&[u8], nom::error::ErrorKind)>(b"//")(string).is_ok(){
             string = take_till(nl)(string)?.0;
+        }else if tag::<_,_, (&[u8], nom::error::ErrorKind)>(b"/*")(string).is_ok(){
+            string = unsafe { take_until("*/")(string)?.0.get_unchecked(2..) };
         }else{
             break;
         }
