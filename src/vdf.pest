@@ -1,3 +1,6 @@
+// NOW UNUSED, being transformed into nom :3
+
+
 file = _{ SOI ~ newline* ~ many ~ newline* ~ &EOI }
 
 pair = { key ~ "="? ~ ( (cond? ~ sub_pair) | (simple_pair ~ cond?) ) }
@@ -10,7 +13,8 @@ key = _{ quoted_str | unquoted_str }
 sub_pair = { newline* ~ "{" ~ newline* ~ many ~ ("}" | &EOI)  }
 many = _{ ( pair ~ newline+ )* ~ pair? }
 
-// CONDITIONS ZONE
+
+// CONDITIONS ZONE (NOTE: In nom, they're not really implemented.. they're fake.)
 cond = _{ "[" ~ cond_expr ~ "]"}
 cond_flag = { "$" ~ cond_char+ } // ex: $WIN32
 cond_binary_operation = _{ and | or } // TODO: Does ^ do XOR?
