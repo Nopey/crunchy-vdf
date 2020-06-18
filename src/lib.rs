@@ -1,9 +1,16 @@
 use std::fmt::Debug;
 pub mod parse;
 
+/// Screwy is the possibly-owned string type
+#[cfg(feature = "escape_sequences")]
+type Screwy<'a> = std::borrow::Cow<'a>;
+
+#[cfg(not(feature = "escape_sequences"))]
+type Screwy<'a> = &'a str;
+
 #[derive(PartialEq)]
 pub enum Item<'a> {
-	String(&'a str),
+	String(Screwy<'a>),
 	Integer(u32), // not u64 cos speed, nobodys testing for it anyways
 	Many(Many<'a>),
 }
@@ -20,7 +27,7 @@ impl<'a> Debug for Item<'a> {
 }
 
 //TODO: maybe make this a type rather than a typedef.
-pub type Pair<'a> = (&'a str, Item<'a>);
+pub type Pair<'a> = (Screwy<'a>, Item<'a>);
 
 #[derive(PartialEq)]
 pub struct Many<'a> (Box<[Pair<'a>]>);

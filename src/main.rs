@@ -6,15 +6,22 @@ const TEST_VDF: &'static [u8] = include_bytes!("test.vdf");
 
 #[no_mangle]
 pub fn parse_test_vdf() -> crunchy_vdf::Many<'static> {
-    let parsed = parse_vdf(TEST_VDF);
-    let parsed = parsed.map_err(|e|
-        e.map(|e| (std::str::from_utf8(e.0).unwrap(), e.1))
-    );
-    // println!("{:#?}", parsed.unwrap().1);
-    parsed.unwrap().1
+    let parsed = parse_vdf(TEST_VDF).unwrap().1;
+
+    #[cfg(debug_assertions)]
+    println!("{:#?}", parsed);
+
+    parsed
 }
+
 fn main() {
-    for _ in 0..1000{
+    #[cfg(parallel)]
+    let pool = rayon::ThreadPoolBuilder::new().build().unwrap();
+    #[cfg(debug_assertions)]
+    let max = 1;
+    #[cfg(not(debug_assertions))]
+    let max = 1000;
+    for _ in 0..max{
         parse_test_vdf();
     }
 }

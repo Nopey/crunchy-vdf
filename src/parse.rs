@@ -10,6 +10,21 @@ use nom::branch::*;
 //TODO: perhaps switch from [u8] to char
 
 /// Parse a Valve Keyvalues file
+#[cfg(feature = "parallel")]
+pub fn parse_vdf<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Many<'a>> {
+    use rayon::prelude::*;
+    //TODO: this functio does bad unwraps hun
+    let many: Vec<_> = ParseManyPar{string}
+        .map(|m| m.unwrap())
+        .par_bridge()
+        .map(|(_, (key, range))| {
+            (key, parse_value(range).map_err(|e| (key, range, e)).expect("stage 4lung cancer").1.unwrap())
+        })
+        .collect();
+    //TODO: Bug: This will accept files with excessive close brackets
+    Ok((b"", Many(many.into_boxed_slice())))
+}
+#[cfg(not(feature = "parallel"))]
 pub fn parse_vdf<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Many<'a>> {
     all_consuming(parse_many)(string)
 }
@@ -19,6 +34,16 @@ fn parse_pair<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Option<Pair>> {
     // Parse the key, either quoted or unquoted string.
     let (string, key) = parse_auto_string(string)?;
 
+    parse_value(string).map(|(rest, value)| (rest, value.map(|value| (key, value))))
+}
+
+#[test]
+fn test_parse_pair() {
+    todo!()
+}
+
+/// Parses a keyvalues value
+fn parse_value<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Option<Item>> {
     // whitespace
     let (string, _) = tuple((whitespace, opt(tuple((
         tag("="),
@@ -34,25 +59,25 @@ fn parse_pair<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Option<Pair>> {
         let (string, cond) = parse_conditional(string)?;
         if cond {
             let (string, value) = parse_many_with_braces(string)?;
-            Ok((string, Some((key, Item::Many(value)))))
+            Ok((string, Some(Item::Many(value))))
         }else {
-            let (string, ()) = skip_braces(string)?;
+            let (string, _) = skip_braces(string)?;
             Ok((string, None))
         }
     } else if c==Some(&b'{') || c==Some(&b'\n') || c==Some(&b'\r') {
         // if next char is '{', parse sub_pair
         let (string, ()) = newline_maybe(string)?;
         let (string, value) = parse_many_with_braces(string)?;
-        Ok((string, Some((key, Item::Many(value)))))
+        Ok((string, Some(Item::Many(value))))
     } else {
         // else, parse simple pair and maybe conditional.
         let (string, value) = parse_auto_string(string)?;
-        Ok((string, Some((key, Item::String(value)))))
+        Ok((string, Some(Item::String(value))))
     }
 }
 
 #[test]
-fn test_parse_pair() {
+fn test_parse_value() {
     todo!()
 }
 
@@ -98,14 +123,14 @@ fn test_skip_braces_inner() {
 
 /// Skips from an opening '{' to the closing '}'
 /// its like parse_many_with_braces, but without parsing the many.
-fn skip_braces<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], ()> {
-    delimited(
+fn skip_braces<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], &'a [u8]> {
+    recognize(delimited(
         tuple((newline_maybe, tag("{"), newline_maybe)),
         skip_braces_inner,
         alt((tag("}"), all_consuming(rest)))
         // Alternatively, if EOF trailing braces are mandatory:
         // tag("}")
-    )(string).map(|a| (a.0, ()))
+    ))(string)
 }
 
 #[test]
@@ -127,6 +152,52 @@ fn parse_many_with_braces<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Many> {
 
 #[test]
 fn test_parse_many_with_braces() {
+    todo!()
+}
+
+#[cfg(feature = "parallel")]
+struct ParseManyPar<'a>{
+    string: &'a [u8]
+}
+#[cfg(feature = "parallel")]
+impl<'a> Iterator for ParseManyPar<'a> {
+    type Item = IResult<&'a [u8], (Screwy<'a>, &'a [u8])>;
+    fn next ( &mut self ) -> Option<Self::Item> {
+        self.string = match newline_maybe(self.string) {
+            Ok((g, _)) => g,
+            Err(e) => return Some(Err(e))
+        };
+
+        // If we've hit EOF or end of sub_pair
+        if match self.string.get(0) {
+            Some(b'}') => true,
+            None => true,
+            _ => false
+        } {
+            // then don't parse any more
+            return None;
+        }
+
+        // parse key
+        let (rest, key) = match parse_auto_string(self.string){
+            Ok(g) => g,
+            Err(e) => return Some(Err(e))
+        };
+        self.string = rest;
+
+        let r = skip_braces(self.string).map(|(a, b)| (a, (key, b)));
+        if let Ok((rest, _)) = r {
+            self.string = rest;
+        }else{
+            println!("WE BAD, GOIN DOWN");
+        }
+        Some(r)
+    }
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn test_parse_many_par() {
     todo!()
 }
 
@@ -187,7 +258,7 @@ fn test_parse_conditional_and_evaluate(){
 }
 
 /// Parse either a quoted on unquoted string, automatically.
-fn parse_auto_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], &'a str> {
+fn parse_auto_string<'a> ( string: &'a [u8] ) -> IResult<&'a [u8], Screwy<'a>> {
     alt((parse_string, parse_unquoted_string))(string)
 }
 
@@ -211,7 +282,7 @@ fn parse_unquoted_string<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], &'a s
     // I only hope this not_bad conditional isn't too slow.
     let not_bad = |ref c| !b"\"{}[]\t \n\r".contains(c);
 
-    let (rest, run) = take_while1(not_bad)(string)?;
+    let (rest, run) = take_while1(not_bad)(string)/*.map_err(|e| e.map(|(u, e)| (u, nom::error::ErrorKind::Not)))*/?;
     string = rest;
     // Safe Version:
     // Ok((string, std::str::from_utf8_unchecked(run).unwrap()))
@@ -226,6 +297,7 @@ fn test_parse_unquoted_string(){
     );
 }
 
+#[cfg(feature = "escape_sequences")]
 fn escape_map( c: u8 ) -> char {
     match c{
         // b'0' => '\0', // hey, no.
@@ -254,6 +326,7 @@ fn test_parse_string_inner_unescaped() {
 }
 
 // TODO: consider using https://docs.rs/nom/5.1.2/nom/bytes/complete/fn.escaped.html
+#[cfg(feature = "escape_sequences")]
 fn parse_string_inner_escaped<'a> ( mut string: &'a [u8] ) -> IResult<&'a [u8], String> {
     // I should hope the files don't contain bs.. ;)
     // i also made it stop on quote marks, because that's the terminator we're looking for.
