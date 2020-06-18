@@ -1,1 +1,6 @@
+# build dir
 /target
+
+# i'd rather not distribute pl_goldrush_halloween.vmf
+# get it from https://github.com/x6herbius/tf2maps/blob/master/PLGoldrushHalloween/pl_goldrush_halloween.vmf
+src/test.vdf

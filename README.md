@@ -4,14 +4,16 @@ Deep fried keyvalues `?:P`
 A Rust keyvalues parser.
 competition time bay-be
 
-## Plan:
-1. Make it work, using pest (probably would get dq'd because parser generator)
-2. Make it work, using nom (and benchmark the two, too!)
-
+## TODO:
+Compare it to fastkv on my machine so I know how much more performance can be squeezed out.
+Add feature gates for
+* Handling escape sequences (Allocation Heaviness)
+* Evaluating Conditionals (currently they're skipped)
+* Experimental multithreading using rayon (top level)
 
 ## Rough Benchmarks as I progress
 (literally linux `time` command, and pl_goldrush_halloween.vmf a thousand times)
-initial P.o.C (pest): ??? TODO: Benchmark pest?
+initial P.o.C (pest): 1.609s
 nom, allocation heavy version (second commit, LTO off): 0.405s
 nom, allocation light version (third commit, LTO off): 0.282s
 nom, allocation light version (third commit, LTO on, panic abort, 1 codegen unit): 0.200s
